@@ -44,9 +44,9 @@ public:
     assert(world_id_ > -1);
     return world_id_;
   }
-  inline int get_Nr_threads() const {
-    assert(nr_threads_ > -1);
-    return nr_threads_;
+  inline int get_size() const {
+    assert(size_ > -1);
+    return size_;
   }
 
   inline int first() const {
@@ -70,7 +70,7 @@ private:
   MPI_Comm MPI_communication_ = 0;
   int world_id_ = -1;
   int id_ = -1;
-  int nr_threads_ = -1;
+  int size_ = -1;
   int world_size_ = -1;
 };
 
