@@ -53,7 +53,7 @@ public:
     return 0;
   }
   inline int last() const {
-    return nr_threads_ - 1;
+    return size_ - 1;
   }
   inline bool isValid() const {
     return id_ >= 0;
