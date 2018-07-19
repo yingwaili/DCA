@@ -35,6 +35,7 @@ public:
   void execute(int num_threads, F&& f, Args&&... args) {
     std::vector<std::future<void>> futures;
     auto& pool = ThreadPool::get_instance();
+    pool.enlarge(num_threads);
 
     // Fork.
     for (int id = 0; id < num_threads; ++id)
@@ -53,11 +54,12 @@ public:
 
     std::vector<std::future<ReturnType>> futures;
     auto& pool = ThreadPool::get_instance();
+    pool.enlarge(num_threads);
 
     // Fork.
     for (int id = 0; id < num_threads; ++id)
       futures.emplace_back(
-              pool.enqueue(std::forward<F>(f), id, num_threads, std::forward<Args>(args)...));
+          pool.enqueue(std::forward<F>(f), id, num_threads, std::forward<Args>(args)...));
     // Reduce.
     ReturnType result = 0;
     for (auto& future : futures)
