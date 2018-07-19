@@ -13,13 +13,13 @@
 #include "dca/config/haves_defines.hpp"
 
 #include "dca/phys/dca_step/cluster_solver/shared_tools/accumulation/sp/sp_accumulator.hpp"
-#include "dca/phys/dca_step/cluster_solver/shared_tools/accumulation/sp/sp_accumulator_gpu.hpp"
 
 #include <array>
 #include <vector>
 #include <iostream>
 #ifdef DCA_HAVE_CUDA
 #include <cuda_profiler_api.h>
+#include "dca/phys/dca_step/cluster_solver/shared_tools/accumulation/sp/sp_accumulator_gpu.hpp"
 #endif  // DCA_HAVE_CUDA
 
 #include "dca/io/json/json_reader.hpp"
