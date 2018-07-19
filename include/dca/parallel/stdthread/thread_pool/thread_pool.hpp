@@ -32,12 +32,13 @@ namespace parallel {
 class ThreadPool {
 public:
   // Creates a pool with n_threads.
-  ThreadPool(size_t n_threads);
-  // Creates a pool with as many threads as hardware threads.
-  ThreadPool();
+  ThreadPool(size_t n_threads = 0);
 
   ThreadPool(const ThreadPool& other) = delete;
   ThreadPool(ThreadPool&& other) = default;
+
+  // Enlarge the pool to n_threads if the current number of threads in the pool is inferior.
+  void enlarge(std::size_t n_threads);
 
   // Call asynchronously the function f with arguments args. This method is thread safe.
   // Returns: a future to the result of f(args...).
@@ -64,11 +65,11 @@ private:
   // need to keep track of threads so we can join them
   std::vector<std::thread> workers_;
   // the task queue
-  std::vector<std::queue<std::packaged_task<void()>>> tasks_;
+  std::vector<std::unique_ptr<std::queue<std::packaged_task<void()>>>> tasks_;
 
   // synchronization
-  std::vector<std::mutex> queue_mutex_;
-  std::vector<std::condition_variable> condition_;
+  std::vector<std::unique_ptr<std::mutex>> queue_mutex_;
+  std::vector<std::unique_ptr<std::condition_variable>> condition_;
   std::atomic<bool> stop_;
   std::atomic<unsigned int> active_id_;
 };
@@ -86,15 +87,15 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
 
   std::future<return_type> res = task.get_future();
   {
-    std::unique_lock<std::mutex> lock(queue_mutex_[id]);
+    std::unique_lock<std::mutex> lock(*queue_mutex_[id]);
 
     // don't allow enqueueing after stopping the pool
     if (stop_)
       throw std::runtime_error("enqueue on stopped ThreadPool");
 
-    tasks_[id].emplace(std::move(task));
+    tasks_[id]->emplace(std::move(task));
   }
-  condition_[id].notify_one();
+  condition_[id]->notify_one();
 
   return res;
 }
