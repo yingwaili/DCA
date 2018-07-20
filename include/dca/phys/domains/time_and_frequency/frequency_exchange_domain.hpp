@@ -72,7 +72,8 @@ bool FrequencyExchangeDomain::initialized_ = false;
 template <class Parameters>
 void FrequencyExchangeDomain::initialize(const Parameters& parameters) {
   if (parameters.compute_all_transfers()) {
-    elements_.resize(parameters.get_four_point_fermionic_frequencies() + 1);
+    assert(parameters.get_four_point_frequency_transfer() > 0);
+    elements_.resize(parameters.get_four_point_frequency_transfer() + 1);
     int idx_value = 0;
     for (int& elem : elements_)
       elem = idx_value++;

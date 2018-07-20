@@ -63,6 +63,9 @@ public:
   const std::vector<double>& get_four_point_momentum_transfer_input() const {
     return four_point_momentum_transfer_input_;
   }
+
+  // Returns the index of the bosonic exchange frequency if compute_all_transfers() == false, or the
+  // index of the maximum transfer if compute_all_transfers() == true.
   int get_four_point_frequency_transfer() const {
     return four_point_frequency_transfer_;
   }
@@ -167,6 +170,10 @@ void FourPointParameters<lattice_dimension>::readWrite(ReaderOrWriter& reader_or
   }
   catch (const std::exception& r_e) {
   }
+
+  if (compute_all_transfers_ && four_point_frequency_transfer_ < 0)
+    throw(std::logic_error(
+        "When compute-all-transfers is set, a greater than 0 frequency-transfer must be chosen."));
 }
 
 }  // params
