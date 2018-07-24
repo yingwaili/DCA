@@ -31,15 +31,14 @@ public:
   template <class Parameters>
   static void initialize(const Parameters& parameters);
 
-  // Returns 1 if Parameters::compute_all_transfers() == true, otherwise 2 *
-  // Parameters::get_four_point_fermionic_frequencies() + 1.
+  // Returns the number of computed frequency exchanges..
   // Precondition: the domain is initialized.
   static int get_size() {
     assert(initialized_);
     return elements_.size();
   }
 
-  // Contains all indices relative to the exchanged Matsubara's frequency inside the two particle
+  // Contains all indices relative to the exchanged frequencies inside the two particle
   // computation.
   // Precondition: the domain is initialized.
   static inline const std::vector<int>& get_elements() {
