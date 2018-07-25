@@ -21,6 +21,7 @@
 #include "dca/function/function.hpp"
 #include "dca/math/geometry/gaussian_quadrature/gaussian_quadrature_domain.hpp"
 #include "dca/math/geometry/tetrahedron_mesh/tetrahedron_mesh.hpp"
+#include "dca/phys/dca_algorithms/compute_greens_function.hpp"
 #include "dca/phys/dca_step/cluster_mapping/coarsegraining/coarsegraining_routines.hpp"
 #include "dca/phys/dca_step/cluster_mapping/coarsegraining/interpolation_matrices.hpp"
 #include "dca/phys/dca_step/cluster_mapping/coarsegraining/tetrahedron_integration.hpp"
@@ -44,6 +45,7 @@ template <typename parameters_type, typename K_dmn>
 class coarsegraining_sp : public coarsegraining_routines<parameters_type, K_dmn>,
                           public tetrahedron_integration<parameters_type, K_dmn> {
 public:
+
   using concurrency_type = typename parameters_type::concurrency_type;
 
   using k_cluster_type = typename K_dmn::parameter_type;
@@ -63,6 +65,7 @@ public:
   using quadrature_dmn = math::geometry::gaussian_quadrature_domain<tetrahedron_dmn>;
 
   using q_dmn = func::dmn_0<coarsegraining_domain<K_dmn, K>>;
+
   using q_0_dmn = func::dmn_0<coarsegraining_domain<K_dmn, ORIGIN>>;
   using tet_dmn = func::dmn_0<coarsegraining_domain<K_dmn, TETRAHEDRON_K>>;
   using tet_0_dmn = func::dmn_0<coarsegraining_domain<K_dmn, TETRAHEDRON_ORIGIN>>;
@@ -78,6 +81,7 @@ public:
   using nu_nu_tet = func::dmn_variadic<nu, nu, tet_dmn>;
 
   const static int DIMENSION = K_dmn::parameter_type::DIMENSION;
+
 
 public:
   coarsegraining_sp(parameters_type& parameters_ref);
@@ -164,6 +168,7 @@ private:
   func::function<std::complex<scalar_type>, nu_nu_q> S_q;
   func::function<std::complex<scalar_type>, nu_nu_q> A_q;
   func::function<std::complex<scalar_type>, nu_nu_q> G_q;
+
 };
 
 template <typename parameters_type, typename K_dmn>
@@ -377,10 +382,20 @@ void coarsegraining_sp<parameters_type, K_dmn>::compute_S_K_w(
 template <typename parameters_type, typename K_dmn>
 template <typename other_scalar_type, typename k_dmn>
 void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w(
-    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn>>& H_0,
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn>>& /*H_0*/,
     const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_K_w,
     func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) {
+
+  // Work space for inverse.
+  linalg::Matrix<std::complex<other_scalar_type>, linalg::CPU> G_inv("G_inv", nu::dmn_size());
+  linalg::Vector<int, linalg::CPU> ipiv;
+  linalg::Vector<std::complex<other_scalar_type>, linalg::CPU> work;
+
+  const std::complex<other_scalar_type> im(0., 1.);
+
   G_K_w = 0.;
+
+  func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, q_dmn>> H_qdmn("H_qdmn");
 
   func::dmn_variadic<K_dmn, w> K_wm_dmn;
   std::pair<int, int> bounds = concurrency.get_bounds(K_wm_dmn);
@@ -389,23 +404,46 @@ void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w(
   for (int l = bounds.first; l < bounds.second; l++) {
     K_wm_dmn.linind_2_subind(l, coor);
 
-    this->compute_G_q_w(coor[0], coor[1], H_0, S_K_w, I_q, H_q, S_q, G_q);
+    const auto w_val = w::get_elements()[coor[1]];
+    // std::cout << "w_val_____________: " << w_val << "," << nu::dmn_size() <<  "\n";
 
-    for (int q_ind = 0; q_ind < q_dmn::dmn_size(); q_ind++)
-      for (int j = 0; j < nu::dmn_size(); j++)
-        for (int i = 0; i < nu::dmn_size(); i++)
-          G_K_w(i, j, coor[0], coor[1]) += G_q(i, j, q_ind) * w_q(q_ind);
+    // this->compute_G_q_w(coor[0], coor[1], H_0, S_K_w, I_q, H_q, S_q, G_q);
+
+    // std::cout << "q_dmn::dmn_size():"<<q_dmn::dmn_size()<<"\n";
+    q_dmn::parameter_type::set_elements(coor[0]);
+    parameters_type::model_type::initialize_H_0(parameters, H_qdmn);
+
+    for (int q_ind = 0; q_ind < q_dmn::dmn_size(); q_ind++) {
+      for (int j = 0; j < nu::dmn_size(); j++) {
+        for (int i = 0; i < nu::dmn_size(); i++) {
+            G_inv(i, j) = -H_qdmn(i, j, q_ind) - S_K_w(i, j, coor[0], coor[1]);
+            if (i == j) G_inv(i, j) += im * w_val + parameters.get_chemical_potential();
+
+            // std::cout << "G_inv_________: "<<i<<","<<j<<"," << G_inv(i,j)<< "\n";
+
+        // std::cout << "G_inv_________: " << q_ind<<","<<q_dmn::get_elements()[q_ind][0] << "," << q_dmn::get_elements()[q_ind][1] << " , " << H_qdmn(0,0,q_ind) << " , " << H_qdmn(1,0,q_ind) << " , " << G_inv(0,0) << " , " << G_inv(0,1) << "\n";
+
+        }
+      }
+      linalg::matrixop::inverse(G_inv, ipiv, work);
+      for (int i = 0; i < nu::dmn_size(); ++i)
+          for (int j = 0; j < nu::dmn_size(); ++j)
+            G_K_w(i, j, coor[0], coor[1]) += G_inv(i, j);
+    }
   }
 
   concurrency.sum(G_K_w);
 
   {
-    scalar_type V_K = 0;
-    for (int q_ind = 0; q_ind < q_dmn::dmn_size(); q_ind++)
-      V_K += w_q(q_ind);
+    // scalar_type V_K = 0;
+    // for (int q_ind = 0; q_ind < q_dmn::dmn_size(); q_ind++)
+    //   V_K += w_q(q_ind);
 
-    G_K_w /= V_K;
+    G_K_w /= q_dmn::dmn_size();
   }
+  // for (int iK=0; iK<K_dmn::dmn_size(); iK++)
+      // std::cout << "\n G_K_w: " << G_K_w(0,0,iK,256) << G_K_w(0,1,iK,256)<< "\n";
+
 }
 
 template <typename parameters_type, typename K_dmn>
