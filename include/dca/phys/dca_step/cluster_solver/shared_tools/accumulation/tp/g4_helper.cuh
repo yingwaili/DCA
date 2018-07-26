@@ -140,14 +140,14 @@ __device__ int G4Helper::wexMinus(const int w_idx, const int w_ex_idx) const {
 
 __device__ int G4Helper::addKex(const int k_idx, const int k_ex_idx) const {
   const int ld = device_members_[0];
-  const int q = k_ex_indices_[k_ex_idx];
-  return add_matrix_[k_idx + ld * q];
+  const int k_ex = k_ex_indices_[k_ex_idx];
+  return add_matrix_[k_idx + ld * k_ex];
 }
 
 __device__ int G4Helper::kexMinus(const int k_idx, const int k_ex_idx) const {
   const int ld = device_members_[1];
-  const int q = k_ex_indices_[k_ex_idx];
-  return sub_matrix_[q + ld * k_idx];
+  const int k_ex = k_ex_indices_[k_ex_idx];
+  return sub_matrix_[k_idx + ld * k_ex];
 }
 
 __device__ bool G4Helper::extendWIndices(int& w1, int& w2) const {

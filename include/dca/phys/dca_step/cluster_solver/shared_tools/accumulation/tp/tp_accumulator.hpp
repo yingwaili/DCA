@@ -355,7 +355,7 @@ double TpAccumulator<Parameters, linalg::CPU>::updateG4() {
   double flops(0);
 
   auto momentum_sum = [](const int k, const int q) { return KDmn::parameter_type::add(k, q); };
-  auto momentum_diff = [](const int k, const int q) { return KDmn::parameter_type::subtract(q, k); };
+  auto q_minus_k = [](const int k, const int q) { return KDmn::parameter_type::subtract(k, q); };
   // Returns the index of the exchange frequency w_ex plus the Matsubara frequency with index w.
   auto w_plus_w_ex = [](const int w, const int w_ex) { return w + w_ex; };
   // Returns the index of the exchange frequency w_ex minus the Matsubara frequency with index w.
@@ -461,8 +461,8 @@ double TpAccumulator<Parameters, linalg::CPU>::updateG4() {
                 for (int k1 = 0; k1 < KDmn::dmn_size(); ++k1) {
                   Complex* const G4_ptr = &(*G4_)(0, 0, 0, 0, k1, k2, k_ex_idx, w1, w2, w_ex_idx);
                   for (int s = 0; s < 2; ++s)
-                    updateG4Atomic(G4_ptr, s, k1, k2, w1, w2, !s, momentum_diff(k1, k_ex),
-                                   momentum_diff(k2, k_ex), w_ex_minus_w(w1, w_ex),
+                    updateG4Atomic(G4_ptr, s, k1, k2, w1, w2, !s, q_minus_k(k1, k_ex),
+                                   q_minus_k(k2, k_ex), w_ex_minus_w(w1, w_ex),
                                    w_ex_minus_w(w2, w_ex), sign_over_2, false);
                 }
             }

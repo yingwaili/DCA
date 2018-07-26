@@ -129,7 +129,6 @@ void SpAccumulator<Paramaters, linalg::CPU>::accumulate(
         const int b_i = config[i].get_right_band();
         const int r_i = config[i].get_right_site();
         const ScalarType t_i = config[i].get_tau();
-        // TODO: check if the sign is correct.
         const int delta_r = RDmn::parameter_type::subtract(r_j, r_i);
         const double scaled_tau = (t_i - t_j) * one_div_two_beta;  // + (i == j) * epsilon;
 
