@@ -45,9 +45,9 @@ public:
     assert(grouping_->get_id() > -1);
     return grouping_->get_id();
   }
-  inline int number_of_processors() const {
-    assert(grouping_->get_Nr_threads() > -1);
-    return grouping_->get_Nr_threads();
+  int number_of_processors() const {
+    assert(grouping_->get_size() > -1);
+    return grouping_->get_size();
   }
   inline int first() const {
     return grouping_->first();
