@@ -78,20 +78,6 @@ TEST_F(DcaParametersTest, ReadFiniteSizeQMC) {
   EXPECT_TRUE(pars_.do_finite_size_qmc());
 }
 
-// Separate test for reading the "do-simple-q-points-summation" parameter, since it is forced to
-// false if "do-DCA+" is set to true.
-TEST_F(DcaParametersTest, ReadSimpleQPointSummation) {
-  reader_.open_file(DCA_SOURCE_DIR
-                    "/test/unit/phys/parameters/dca_parameters/simple_q_points_summation.json");
-  pars_.readWrite(reader_);
-  reader_.close_file();
-
-  EXPECT_TRUE(pars_.do_dca_plus());
-  // Despite the input file having this flag set to true, do_simple_q_points_summation() is forced
-  // to be false.
-  EXPECT_FALSE(pars_.do_simple_q_points_summation());
-}
-
 TEST_F(DcaParametersTest, ConsistencyCheck) {
   reader_.open_file(DCA_SOURCE_DIR "/test/unit/phys/parameters/dca_parameters/not_consistent.json");
   EXPECT_THROW(pars_.readWrite(reader_), std::logic_error);

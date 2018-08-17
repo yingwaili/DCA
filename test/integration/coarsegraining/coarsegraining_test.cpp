@@ -65,23 +65,36 @@ using Coarsegraining =
 template <class SigmaType>
 void computeMockSigma(SigmaType& Sigma);
 
-TEST(CoarsegrainingTest, BilayerVsSingleband) {
-  Concurrency concurrency(0, nullptr);
+void performTest(const bool test_dca_plus) {
+  static Concurrency concurrency(0, nullptr);
 
   Parameters parameters(dca::util::GitVersion::string(), concurrency);
   parameters.read_input_and_broadcast<dca::io::JSONReader>(input);
-  parameters.update_model();
-  parameters.update_domains();
+
+  static bool model_initialized = false;
+  if (!model_initialized) {
+    parameters.update_model();
+    parameters.update_domains();
+    model_initialized = true;
+  }
 
   Data data(parameters);
   data.initialize();
-  computeMockSigma(data.Sigma);
 
   Coarsegraining cluster_mapping_obj(parameters);
-  cluster_mapping_obj.compute_G_K_w(data.H_HOST, data.Sigma, data.G_k_w);
+
+  if (test_dca_plus) {
+    computeMockSigma(data.Sigma_lattice);
+    cluster_mapping_obj.compute_G_K_w(data.H_HOST, data.Sigma_lattice, data.G_k_w);
+  }
+  else {
+    computeMockSigma(data.Sigma);
+    cluster_mapping_obj.compute_G_K_w(data.H_HOST, data.Sigma, data.G_k_w);
+  }
 
   if (concurrency.id() == 0) {
-    const std::string baseline_name = "coarsegraining_baseline.hdf5";
+    const std::string baseline_name = test_dca_plus ? "coarsegraining_dca_plus_baseline.hdf5"
+                                                    : "coarsegraining_dca_baseline.hdf5";
     std::vector<std::complex<double>> raw_data;
 
 #ifdef UPDATE_BASELINE
@@ -128,11 +141,19 @@ TEST(CoarsegrainingTest, BilayerVsSingleband) {
   }
 }
 
+TEST(CoarsegrainingTest, DCABilayerVsSingleband) {
+  performTest(false);
+}
+
+TEST(CoarsegrainingTest, DCAPlusBilayerVsSingleband) {
+  performTest(true);
+}
+
 template <class SigmaType>
 void computeMockSigma(SigmaType& Sigma) {
   using BDmn = dca::phys::domains::electron_band_domain;
   using WDmn = dca::phys::domains::frequency_domain;
-  using KDmn = typename dca::phys::ClusterDomainAliases<2>::KClusterDmn;
+  const int n_k = Sigma[4];
 
   const double U = 4.;
   const std::complex<double> imag(0, 1.);
@@ -140,7 +161,7 @@ void computeMockSigma(SigmaType& Sigma) {
   for (int w = 0; w < WDmn::get_size(); ++w) {
     const double w_val = WDmn::get_elements()[w];
     const std::complex<double> sigma_val = U * U / (4. * imag * w_val);
-    for (int k = 0; k < KDmn::dmn_size(); ++k)
+    for (int k = 0; k < n_k; ++k)
       for (int s = 0; s < 2; ++s)
         for (int b = 0; b < BDmn::get_size(); ++b)
           Sigma(b, s, b, s, k, w) = sigma_val;

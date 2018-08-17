@@ -270,12 +270,6 @@ void DcaParameters::readWrite(ReaderOrWriter& reader_or_writer) {
   if (reader_or_writer.is_reader()) {
     if (do_finite_size_qmc_ && do_dca_plus_)
       throw std::logic_error("Finite-size QMC and DCA+ are mutually exclusive options.");
-
-    if (do_simple_q_points_summation_ && do_dca_plus_) {
-      std::cerr << "DCA+ does not support the simple q point summation algorithm.\n"
-                << "Setting do_q_point_summation_ to false.\n";
-      do_simple_q_points_summation_ = false;
-    }
   }
 }
 
