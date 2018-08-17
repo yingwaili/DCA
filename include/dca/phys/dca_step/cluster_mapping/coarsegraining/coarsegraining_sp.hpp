@@ -141,6 +141,15 @@ public:
 
 private:
   template <typename other_scalar_type>
+  void compute_G_K_w_simple(
+      const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_k_w,
+      func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) const;
+  template <typename other_scalar_type, typename k_dmn>
+  void compute_G_K_w_interpolation(
+      const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn>>& H_0,
+      const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_k_w,
+      func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w);
+  template <typename other_scalar_type>
   void G_K_w_task(
       int id, int n_threads, std::pair<int, int> external_bounds,
       const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_k_w,
@@ -234,35 +243,39 @@ void coarsegraining_sp<parameters_type, K_dmn>::initialize() {
   this->compute_gaussian_mesh(parameters.get_k_mesh_recursion(), parameters.get_quadrature_rule(),
                               parameters.get_coarsegraining_periods());
 
-  w_q.reset();
-  w_tet.reset();
-
-  for (int l = 0; l < w_q.size(); l++)
-    w_q(l) = q_dmn::parameter_type::get_weights()[l];
-
-  for (int l = 0; l < w_tet.size(); l++)
-    w_tet(l) = tet_dmn::parameter_type::get_weights()[l];
-
-  // Compute H0(k+q) for each value of k and q.
-  H0_q_.resize(K_dmn::dmn_size());
-  for (int k = 0; k < H0_q_.size(); ++k) {
-    q_dmn::parameter_type::set_elements(k);
-    parameters_type::model_type::initialize_H_0(parameters, H0_q_[k]);
+  if (parameters.do_simple_q_points_summation()) {
+    // Compute H0(k+q) for each value of k and q.
+    H0_q_.resize(K_dmn::dmn_size());
+    for (int k = 0; k < H0_q_.size(); ++k) {
+      q_dmn::parameter_type::set_elements(k);
+      parameters_type::model_type::initialize_H_0(parameters, H0_q_[k]);
+    }
   }
 
-  I_tet.reset();
-  H_tet.reset();
-  S_tet.reset();
-  A_tet.reset();
-  G_tet.reset();
+  else {
+    w_q.reset();
+    w_tet.reset();
 
-  I_q.reset();
-  H_q.reset();
-  S_q.reset();
-  A_q.reset();
-  G_q.reset();
+    for (int l = 0; l < w_q.size(); l++)
+      w_q(l) = q_dmn::parameter_type::get_weights()[l];
 
-  interpolation_matrices<scalar_type, k_HOST, q_dmn>::initialize(concurrency);
+    for (int l = 0; l < w_tet.size(); l++)
+      w_tet(l) = tet_dmn::parameter_type::get_weights()[l];
+
+    I_tet.reset();
+    H_tet.reset();
+    S_tet.reset();
+    A_tet.reset();
+    G_tet.reset();
+
+    I_q.reset();
+    H_q.reset();
+    S_q.reset();
+    A_q.reset();
+    G_q.reset();
+
+    interpolation_matrices<scalar_type, k_HOST, q_dmn>::initialize(concurrency);
+  }
 }
 
 template <typename parameters_type, typename K_dmn>
@@ -390,9 +403,21 @@ void coarsegraining_sp<parameters_type, K_dmn>::compute_S_K_w(
 template <typename parameters_type, typename K_dmn>
 template <typename other_scalar_type, typename k_dmn>
 void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w(
-    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn>>& /*H_0*/,
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn>>& H_0,
     const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_K_w,
     func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) {
+  if (parameters.do_simple_q_points_summation())
+    // Computes G_K_w(k,w) = 1/N_q \sum_q 1/(i w + mu - H0(k+q,w) - Sigma(k,w)).
+    compute_G_K_w_simple(S_K_w, G_K_w);
+  else
+    compute_G_K_w_interpolation(H_0, S_K_w, G_K_w);
+}
+
+template <typename parameters_type, typename K_dmn>
+template <typename other_scalar_type>
+void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w_simple(
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_K_w,
+    func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) const {
   G_K_w = 0.;
 
   func::dmn_variadic<K_dmn, w> K_wm_dmn;
@@ -449,6 +474,38 @@ void coarsegraining_sp<parameters_type, K_dmn>::G_K_w_task(
           G_k_w(i, j, k, w) += G_inv(i, j);
     }
   }
+}
+
+template <typename parameters_type, typename K_dmn>
+template <typename other_scalar_type, typename k_dmn>
+void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w_interpolation(
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn>>& H_0,
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_K_w,
+    func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) {
+  G_K_w = 0.;
+
+  func::dmn_variadic<K_dmn, w> K_wm_dmn;
+  std::pair<int, int> bounds = concurrency.get_bounds(K_wm_dmn);
+
+  int coor[2];
+  for (int l = bounds.first; l < bounds.second; l++) {
+    K_wm_dmn.linind_2_subind(l, coor);
+
+    this->compute_G_q_w(coor[0], coor[1], H_0, S_K_w, I_q, H_q, S_q, G_q);
+
+    for (int q_ind = 0; q_ind < q_dmn::dmn_size(); q_ind++)
+      for (int j = 0; j < nu::dmn_size(); j++)
+        for (int i = 0; i < nu::dmn_size(); i++)
+          G_K_w(i, j, coor[0], coor[1]) += G_q(i, j, q_ind) * w_q(q_ind);
+  }
+
+  concurrency.sum(G_K_w);
+
+  scalar_type V_K = 0;
+  for (int q_ind = 0; q_ind < q_dmn::dmn_size(); q_ind++)
+    V_K += w_q(q_ind);
+
+  G_K_w /= V_K;
 }
 
 template <typename parameters_type, typename K_dmn>
@@ -546,6 +603,7 @@ void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w(
     const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn>>& H_0,
     const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn, w>>& S_k_w,
     func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) {
+  assert(!parameters.do_simple_q_points_summation());
   G_K_w = 0.;
 
   func::function<std::complex<scalar_type>, func::dmn_variadic<nu, nu, k_dmn>> A_k("A_k");

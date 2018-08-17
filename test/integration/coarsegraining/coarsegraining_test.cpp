@@ -35,6 +35,8 @@
 #include "dca/io/hdf5/hdf5_reader.hpp"
 #include "dca/io/hdf5/hdf5_writer.hpp"
 
+// If this flag is defined, prepare the baseline using the singleband model, otherwise run the test
+// comparing the bilayer model with the baseline.
 #undef UPDATE_BASELINE
 
 const std::string input_dir = DCA_SOURCE_DIR "/test/integration/coarsegraining/";
@@ -108,6 +110,9 @@ TEST(CoarsegrainingTest, BilayerVsSingleband) {
     ASSERT_EQ(raw_data.size(), G_check.size());
     std::copy_n(raw_data.data(), raw_data.size(), G_check.values());
 
+    // The desired result is G(k=0) = G_aa(k=0) + G_ab(k=0) and G(k=\pi) = G_aa(k=0) - G_ab(k=0).
+    // This follows from c(0) = (c_aa(0) + c_ab(0)) / sqrt(2)
+    // and c(\pi) = (c_aa(0) - c_ab(0)) / sqrt(2).
     for (int w = 0; w < WDmn::dmn_size(); ++w)
       for (int s = 0; s < SDmn::dmn_size(); ++s) {
         const std::complex<double> G_k_0 = G_check(0, s, 0, s, 0, w);
@@ -125,19 +130,19 @@ TEST(CoarsegrainingTest, BilayerVsSingleband) {
 
 template <class SigmaType>
 void computeMockSigma(SigmaType& Sigma) {
-    using BDmn = dca::phys::domains::electron_band_domain;
-    using WDmn = dca::phys::domains::frequency_domain;
-    using KDmn = typename dca::phys::ClusterDomainAliases<2>::KClusterDmn;
+  using BDmn = dca::phys::domains::electron_band_domain;
+  using WDmn = dca::phys::domains::frequency_domain;
+  using KDmn = typename dca::phys::ClusterDomainAliases<2>::KClusterDmn;
 
-    const double U = 4.;
-    const std::complex<double> imag(0, 1.);
+  const double U = 4.;
+  const std::complex<double> imag(0, 1.);
 
-    for (int w = 0; w < WDmn::get_size(); ++w) {
-        const double w_val = WDmn::get_elements()[w];
-        const std::complex<double> sigma_val = U * U / (4. * imag * w_val);
-        for (int k = 0; k < KDmn::dmn_size(); ++k)
-            for (int s = 0; s < 2; ++s)
-                for (int b = 0; b < BDmn::get_size(); ++b)
-                    Sigma(b, s, b, s, k, w) = sigma_val;
-    }
+  for (int w = 0; w < WDmn::get_size(); ++w) {
+    const double w_val = WDmn::get_elements()[w];
+    const std::complex<double> sigma_val = U * U / (4. * imag * w_val);
+    for (int k = 0; k < KDmn::dmn_size(); ++k)
+      for (int s = 0; s < 2; ++s)
+        for (int b = 0; b < BDmn::get_size(); ++b)
+          Sigma(b, s, b, s, k, w) = sigma_val;
+  }
 }
