@@ -1,0 +1,10 @@
+{
+    "DCA": {
+        "coarse-graining": {
+            "do-simple-q-points-summation" : true
+        },
+        "DCA+": {
+            "do-DCA+": true
+        }
+    }
+}

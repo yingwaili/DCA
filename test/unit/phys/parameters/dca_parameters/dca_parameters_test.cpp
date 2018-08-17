@@ -28,6 +28,7 @@ TEST_F(DcaParametersTest, DefaultValues) {
   EXPECT_EQ(1., pars_.get_self_energy_mixing_factor());
   EXPECT_EQ(std::vector<int>{0}, pars_.get_interacting_orbitals());
   EXPECT_FALSE(pars_.do_finite_size_qmc());
+  EXPECT_EQ(true, pars_.do_simple_q_points_summation());
   EXPECT_EQ(0, pars_.get_k_mesh_recursion());
   EXPECT_EQ(0, pars_.get_coarsegraining_periods());
   EXPECT_EQ(1, pars_.get_quadrature_rule());
@@ -53,6 +54,7 @@ TEST_F(DcaParametersTest, ReadAll) {
   EXPECT_EQ(0.5, pars_.get_self_energy_mixing_factor());
   EXPECT_EQ(interacting_orbitals_check, pars_.get_interacting_orbitals());
   EXPECT_FALSE(pars_.do_finite_size_qmc());
+  EXPECT_FALSE(pars_.do_simple_q_points_summation());
   EXPECT_EQ(3, pars_.get_k_mesh_recursion());
   EXPECT_EQ(2, pars_.get_coarsegraining_periods());
   EXPECT_EQ(2, pars_.get_quadrature_rule());
@@ -74,6 +76,20 @@ TEST_F(DcaParametersTest, ReadFiniteSizeQMC) {
   reader_.close_file();
 
   EXPECT_TRUE(pars_.do_finite_size_qmc());
+}
+
+// Separate test for reading the "do-simple-q-points-summation" parameter, since it is forced to
+// false if "do-DCA+" is set to true.
+TEST_F(DcaParametersTest, ReadSimpleQPointSummation) {
+  reader_.open_file(DCA_SOURCE_DIR
+                    "/test/unit/phys/parameters/dca_parameters/simple_q_points_summation.json");
+  pars_.readWrite(reader_);
+  reader_.close_file();
+
+  EXPECT_TRUE(pars_.do_dca_plus());
+  // Despite the input file having this flag set to true, do_simple_q_points_summation() is forced
+  // to be false.
+  EXPECT_FALSE(pars_.do_simple_q_points_summation());
 }
 
 TEST_F(DcaParametersTest, ConsistencyCheck) {
