@@ -23,7 +23,7 @@ MPIConcurrency::MPIConcurrency(int argc, char** argv)
       MPICollectiveSum(grouping_) {
   // INTERNAL: Consider moving MPI_Init inside the MPIProcessorGrouping class.
   int provided = 0;
-  constexpr int required = MPI_THREAD_FUNNELED;
+  constexpr int required = MPI_THREAD_SERIALIZED;
   MPI_Init_thread(&argc, &argv, required, &provided);
   if (provided < required)
     throw(std::logic_error("MPI does not provide adequate thread support."));

@@ -13,6 +13,7 @@
 #define DCA_PHYS_DCA_STEP_CLUSTER_MAPPING_COARSEGRAINING_COARSEGRAINING_SP_HPP
 
 #include <complex>
+#include <functional>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -140,20 +141,36 @@ public:
       func::function<other_scalar_type, func::dmn_variadic<nu, nu, K_dmn, t>>& G0_k_w);
 
 private:
-  template <typename other_scalar_type>
+  template <typename other_scalar_type, typename SigmaKDmn>
   void compute_G_K_w_simple(
-      const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_k_w,
+      const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, SigmaKDmn, w>>& S_k_w,
       func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) const;
+
+  // Implementations for DCA.
   template <typename other_scalar_type, typename k_dmn>
   void compute_G_K_w_interpolation(
       const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn>>& H_0,
       const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_k_w,
       func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w);
-  template <typename other_scalar_type>
-  void G_K_w_task(
+  template <typename other_scalar_type, typename SigmaKDmn>
+  void G_K_w_dca_task(
       int id, int n_threads, std::pair<int, int> external_bounds,
-      const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_k_w,
+      const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, SigmaKDmn, w>>& S_k_w,
       func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_k_w) const;
+
+  // Implementations for DCA+.
+  template <typename other_scalar_type, typename KLatticeDmn>
+  void compute_G_K_w_old_interpolation(
+      const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, KLatticeDmn>>& H_0,
+      const func::function<std::complex<other_scalar_type>,
+                           func::dmn_variadic<nu, nu, KLatticeDmn, w>>& S_k_w,
+      func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w);
+  template <typename other_scalar_type, typename KLatticeDmn>
+  void G_K_w_dca_plus_task(
+      int id, int n_threads, std::pair<int, int> external_bounds,
+      const func::function<std::complex<other_scalar_type>,
+                           func::dmn_variadic<nu, nu, KLatticeDmn, w>>& S_k_w,
+      func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) const;
 
   void update_shell(int i, int N) const;
 
@@ -414,19 +431,26 @@ void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w(
 }
 
 template <typename parameters_type, typename K_dmn>
-template <typename other_scalar_type>
+template <typename other_scalar_type, typename SigmaKDmn>
 void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w_simple(
-    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_K_w,
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, SigmaKDmn, w>>& S_K_w,
     func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) const {
   G_K_w = 0.;
 
   func::dmn_variadic<K_dmn, w> K_wm_dmn;
   const std::pair<int, int> external_bounds = concurrency.get_bounds(K_wm_dmn);
 
+  std::function<void(int, int)> task;
+  if (std::is_same<K_dmn, SigmaKDmn>::value)  // do DCA.
+    task = std::bind(&ThisType::G_K_w_dca_task<other_scalar_type, SigmaKDmn>, this,
+                     std::placeholders::_1, std::placeholders::_2, external_bounds, std::ref(S_K_w),
+                     std::ref(G_K_w));
+  else  // do DCA+.
+    task = std::bind(&ThisType::G_K_w_dca_plus_task<other_scalar_type, SigmaKDmn>, this,
+                     std::placeholders::_1, std::placeholders::_2, external_bounds, std::ref(S_K_w),
+                     std::ref(G_K_w));
+
   Threading threading_obj;
-  std::function<void(int, int)> task =
-      std::bind(&ThisType::G_K_w_task<other_scalar_type>, this, std::placeholders::_1,
-                std::placeholders::_2, external_bounds, std::ref(S_K_w), std::ref(G_K_w));
   const int n_threads = parameters.get_coarsegraining_threads();
   threading_obj.execute(n_threads, task);
 
@@ -436,12 +460,14 @@ void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w_simple(
 }
 
 template <typename parameters_type, typename K_dmn>
-template <typename other_scalar_type>
-void coarsegraining_sp<parameters_type, K_dmn>::G_K_w_task(
+template <typename other_scalar_type, typename SigmaKDmn>
+void coarsegraining_sp<parameters_type, K_dmn>::G_K_w_dca_task(
     const int id, const int n_threads, const std::pair<int, int> external_bounds,
-    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& S_k_w,
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, SigmaKDmn, w>>& S_k_w,
     func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_k_w) const {
   assert(H0_q_.size() == K_dmn::dmn_size());
+  if (!std::is_same<K_dmn, SigmaKDmn>::value)
+    throw(std::logic_error("S_k_w must be defined on the cluster."));
 
   const auto bounds = parallel::util::getBounds(id, n_threads, external_bounds);
   linalg::Matrix<std::complex<other_scalar_type>, linalg::CPU> G_inv("G_inv", nu::dmn_size());
@@ -598,11 +624,24 @@ void coarsegraining_sp<parameters_type, K_dmn>::compute_S_K_w(
 }
 
 template <typename parameters_type, typename K_dmn>
-template <typename other_scalar_type, typename KLatticeDmn>
+template <typename other_scalar_type, typename SigmaKDmn>
 void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w(
-    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, KLatticeDmn>>& /*H_0*/,
-    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, KLatticeDmn, w>>& S_k_w,
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, SigmaKDmn>>& H_0,
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, SigmaKDmn, w>>& S_k_w,
     func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) {
+  if (parameters.do_simple_q_points_summation())
+    compute_G_K_w_simple(S_k_w, G_K_w);
+  else
+    compute_G_K_w_old_interpolation(H_0, S_k_w, G_K_w);
+}
+
+template <typename parameters_type, typename K_dmn>
+template <typename other_scalar_type, typename KLatticeDmn>
+void coarsegraining_sp<parameters_type, K_dmn>::G_K_w_dca_plus_task(
+    const int id, const int n_threads, const std::pair<int, int> external_bounds,
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, KLatticeDmn, w>>& S_k_w,
+    func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) const {
+  assert(H0_q_.size() == K_dmn::dmn_size());
   G_K_w = 0.;
 
   func::function<std::complex<scalar_type>, func::dmn_variadic<nu, nu, KLatticeDmn>> S_k("S_k");
@@ -612,39 +651,91 @@ void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w(
   linalg::Vector<int, linalg::CPU> ipiv;
   linalg::Vector<std::complex<other_scalar_type>, linalg::CPU> work;
   func::dmn_variadic<K_dmn, w> K_wm_dmn;
+  int coor[2];
+  int old_w_id = -1;
   const std::complex<other_scalar_type> im(0., 1.);
   constexpr int n_spin_bands = parameters_type::bands * 2;
 
-  for (int w_id = 0; w_id < w::dmn_size(); ++w_id) {
+  const auto bounds = parallel::util::getBounds(id, n_threads, external_bounds);
+
+  for (int l = bounds.first; l < bounds.second; ++l) {
+    K_wm_dmn.linind_2_subind(l, coor);
+    const int k_id = coor[0];
+    const int w_id = coor[1];
     const auto w_val = w::get_elements()[w_id];
 
-    for (int kl_id = 0; kl_id < KLatticeDmn::dmn_size(); ++kl_id)
-      for (int j = 0; j < n_spin_bands; j++)
-        for (int i = 0; i < n_spin_bands; i++)
-          S_k(i, j, kl_id) = S_k_w(i, j, kl_id, w_id);
+    // TODO: the copy is not technically necessary as S_k_w is stored in a contiguous address and is
+    //       constant.
+    if (old_w_id != w_id) {  // Copy a portion of S_k_w.
+      for (int kl_id = 0; kl_id < KLatticeDmn::dmn_size(); ++kl_id)
+        for (int j = 0; j < n_spin_bands; j++)
+          for (int i = 0; i < n_spin_bands; i++)
+            S_k(i, j, kl_id) = S_k_w(i, j, kl_id, w_id);
+      old_w_id = w_id;
+    }
 
-    for (int k_id = 0; k_id < K_dmn::dmn_size(); ++k_id) {
-      const auto& H0 = H0_q_[k_id];
-        coarsegraining_routines<parameters_type, K_dmn>::wannier_interpolation(k_id, S_k, S_q);
+    const auto& H0 = H0_q_[k_id];
+    coarsegraining_routines<parameters_type, K_dmn>::wannier_interpolation(k_id, S_k, S_q);
 
-      for (int q_id = 0; q_id < q_dmn::dmn_size(); q_id++) {
-        for (int j = 0; j < n_spin_bands; j++) {
-          for (int i = 0; i < n_spin_bands; i++) {
-            G_inv(i, j) = -H0(i, j, q_id) - S_q(i, j, q_id);
-            if (i == j)
-              G_inv(i, j) += im * w_val + parameters.get_chemical_potential();
-          }
+    for (int q_id = 0; q_id < q_dmn::dmn_size(); q_id++) {
+      for (int j = 0; j < n_spin_bands; j++) {
+        for (int i = 0; i < n_spin_bands; i++) {
+          G_inv(i, j) = -H0(i, j, q_id) - S_q(i, j, q_id);
+          if (i == j)
+            G_inv(i, j) += im * w_val + parameters.get_chemical_potential();
         }
-
-        linalg::matrixop::inverse(G_inv, ipiv, work);
-        for (int j = 0; j < n_spin_bands; ++j)
-          for (int i = 0; i < n_spin_bands; ++i)
-            G_K_w(i, j, k_id, w_id) += G_inv(i, j);
       }
+
+      linalg::matrixop::inverse(G_inv, ipiv, work);
+      for (int j = 0; j < n_spin_bands; ++j)
+        for (int i = 0; i < n_spin_bands; ++i)
+          G_K_w(i, j, k_id, w_id) += G_inv(i, j);
     }
   }
+}
 
-  G_K_w /= q_dmn::dmn_size();
+template <typename parameters_type, typename K_dmn>
+template <typename other_scalar_type, typename k_dmn>
+void coarsegraining_sp<parameters_type, K_dmn>::compute_G_K_w_old_interpolation(
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn>>& H_0,
+    const func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn, w>>& S_k_w,
+    func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, K_dmn, w>>& G_K_w) {
+  assert(!parameters.do_simple_q_points_summation());
+  G_K_w = 0.;
+
+  func::function<std::complex<scalar_type>, func::dmn_variadic<nu, nu, k_dmn>> A_k("A_k");
+  func::function<std::complex<other_scalar_type>, func::dmn_variadic<nu, nu, k_dmn, w>> A_k_w(
+      "A_k_w");
+
+  latticemapping::transform_to_alpha::forward(1., S_k_w, A_k_w);
+
+  func::dmn_variadic<K_dmn, w> K_wm_dmn;
+  std::pair<int, int> bounds = concurrency.get_bounds(K_wm_dmn);
+
+  int coor[2];
+  for (int l = bounds.first; l < bounds.second; l++) {
+    K_wm_dmn.linind_2_subind(l, coor);
+
+    for (int k_ind = 0; k_ind < k_dmn::dmn_size(); k_ind++)
+      for (int j = 0; j < nu::dmn_size(); j++)
+        for (int i = 0; i < nu::dmn_size(); i++)
+          A_k(i, j, k_ind) = A_k_w(i, j, k_ind, coor[1]);
+
+    this->compute_G_q_w(coor[0], coor[1], H_0, A_k, I_q, H_q, A_q, S_q, G_q);
+
+    for (int q_ind = 0; q_ind < q_dmn::dmn_size(); q_ind++)
+      for (int j = 0; j < nu::dmn_size(); j++)
+        for (int i = 0; i < nu::dmn_size(); i++)
+          G_K_w(i, j, coor[0], coor[1]) += G_q(i, j, q_ind) * w_q(q_ind);
+  }
+
+  concurrency.sum(G_K_w);
+
+  scalar_type V_K = 0;
+  for (int q_ind = 0; q_ind < q_dmn::dmn_size(); q_ind++)
+    V_K += w_q(q_ind);
+
+  G_K_w /= V_K;
 }
 
 template <typename parameters_type, typename K_dmn>
