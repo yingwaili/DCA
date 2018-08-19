@@ -270,15 +270,6 @@ void coarsegraining_sp<parameters_type, K_dmn>::initialize() {
   }
 
   else {
-    w_q.reset();
-    w_tet.reset();
-
-    for (int l = 0; l < w_q.size(); l++)
-      w_q(l) = q_dmn::parameter_type::get_weights()[l];
-
-    for (int l = 0; l < w_tet.size(); l++)
-      w_tet(l) = tet_dmn::parameter_type::get_weights()[l];
-
     I_tet.reset();
     H_tet.reset();
     S_tet.reset();
@@ -293,6 +284,13 @@ void coarsegraining_sp<parameters_type, K_dmn>::initialize() {
 
     interpolation_matrices<scalar_type, k_HOST, q_dmn>::initialize(concurrency);
   }
+
+  w_q.reset();
+  w_tet.reset();
+  for (int l = 0; l < w_q.size(); l++)
+    w_q(l) = q_dmn::parameter_type::get_weights()[l];
+  for (int l = 0; l < w_tet.size(); l++)
+    w_tet(l) = tet_dmn::parameter_type::get_weights()[l];
 }
 
 template <typename parameters_type, typename K_dmn>
