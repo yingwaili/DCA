@@ -673,7 +673,10 @@ void coarsegraining_sp<parameters_type, K_dmn>::G_K_w_dca_plus_task(
     }
 
     const auto& H0 = H0_q_[k_id];
-    coarsegraining_routines<parameters_type, K_dmn>::wannier_interpolation(k_id, S_k, S_q);
+    //    coarsegraining_routines<parameters_type, K_dmn>::wannier_interpolation(k_id, S_k, S_q);
+    const double alpha = w_val > 0 ? 1 : -1;
+    coarsegraining_routines<parameters_type, K_dmn>::shiftedInverseWannierInterpolation(k_id, alpha,
+                                                                                        S_k, S_q);
 
     for (int q_id = 0; q_id < q_dmn::dmn_size(); q_id++) {
       for (int j = 0; j < n_spin_bands; j++) {

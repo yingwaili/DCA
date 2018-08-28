@@ -64,6 +64,12 @@ public:
 public:
   coarsegraining_routines(parameters_type& parameters_ref);
 
+  template <typename scalar_type, typename k_dmn_t, typename q_dmn_t>
+  void shiftedInverseWannierInterpolation(
+      int K_ind, double alpha,
+      const func::function<std::complex<scalar_type>, func::dmn_variadic<nu, nu, k_dmn_t>>& f_k,
+      func::function<std::complex<scalar_type>, func::dmn_variadic<nu, nu, q_dmn_t>>& f_q) const;
+
 protected:
   void compute_tetrahedron_mesh(int k_mesh_refinement, int number_of_periods) const;
 
@@ -165,6 +171,22 @@ protected:
 template <typename parameters_type, typename K_dmn>
 coarsegraining_routines<parameters_type, K_dmn>::coarsegraining_routines(parameters_type& parameters_ref)
     : parameters(parameters_ref), concurrency(parameters.get_concurrency()) {}
+
+template <class Parameters, class KDmn>
+template <typename ScalarType, typename kdmn, typename QDmn>
+void coarsegraining_routines<Parameters, KDmn>::shiftedInverseWannierInterpolation(
+    const int k_ind, const double alpha,
+    const func::function<std::complex<ScalarType>, func::dmn_variadic<nu, nu, kdmn>>& f_k,
+    func::function<std::complex<ScalarType>, func::dmn_variadic<nu, nu, QDmn>>& f_q) const {
+
+    func::function<std::complex<ScalarType>, func::dmn_variadic<nu, nu, kdmn>> f_k_transf;
+    func::function<std::complex<ScalarType>, func::dmn_variadic<nu, nu, QDmn>> f_q_transf;
+
+    latticemapping::transform_to_alpha::forward(alpha, f_k, f_k_transf);
+    wannier_interpolation(k_ind, f_k_transf, f_q_transf);
+    latticemapping::transform_to_alpha::backward(alpha, f_q, f_q_transf);
+
+}
 
 template <typename parameters_type, typename K_dmn>
 void coarsegraining_routines<parameters_type, K_dmn>::compute_tetrahedron_mesh(
