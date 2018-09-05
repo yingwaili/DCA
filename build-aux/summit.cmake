@@ -18,3 +18,10 @@ set(MAGMA_DIR $ENV{OLCF_MAGMA_ROOT} CACHE PATH
 
 set(FFTW_DIR $ENV{OLCF_FFTW_ROOT} CACHE PATH
   "Path to the FFTW3 installation directory. Hint for CMake to find FFTW3.")
+
+# For some reason the following paths are not picked up by cmake on Summit even with FFTW_DIR specified.
+set(FFTW_INCLUDE_DIR $ENV{OLCF_FFTW_ROOT}/include/ CACHE PATH
+  "Path to fftw3.h.")
+
+set(FFTW_LIBRARY $ENV{OLCF_FFTW_ROOT}/lib/libfftw3.so CACHE FILEPATH
+  "Path to the FFTW3(-compatible) library.")
